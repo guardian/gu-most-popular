@@ -19,8 +19,10 @@ import content_api
 jinja_environment = jinja2.Environment(
 	loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates")))
 
+FIVE_MINUTES = 5 * 60
+
 def fresh(current_seconds):
-	return (time.time() - current_seconds) < 5 * 60
+	return (time.time() - current_seconds) < FIVE_MINUTES
 
 def resolve_content(url):
 	params = {'show-fields' : 'headline,thumbnail,trailText'}
