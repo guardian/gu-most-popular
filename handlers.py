@@ -34,10 +34,10 @@ def read_ophan(section_id = None):
 
 	ophan_json = None
 
-	if section_id:
-		ophan_json = ophan.popular(section_id = section_id)
-	else:
+	if section_id == 'all':
 		ophan_json = ophan.popular()
+	else:
+		ophan_json = ophan.popular(section_id = section_id)		
 
 	if not ophan_json:
 		raise deferred.PermanentTaskFailure()
@@ -55,7 +55,12 @@ def read_ophan(section_id = None):
 	if section_id: base_key = section_id
 
 	client.set(base_key, json.dumps(resolved_stories))
-	client.set(base_key + '.epoch_seconds', time.time())	
+	client.set(base_key + '.epoch_seconds', time.time())
+
+	logging.info("Updated data for section %s" % section_id)	
+
+def refresh_data(section_id):
+	deferred.defer(read_ophan, section_id = section_id)
 
 class MainPage(webapp2.RequestHandler):
 	def get(self):
@@ -74,17 +79,13 @@ class MostViewed(webapp2.RequestHandler):
 		ophan_json = client.get(section_id)
 		
 		if not ophan_json:
-			try:
-				deferred.defer(read_ophan, section_id = section_id, _name = section_id)
-			except taskqueue.DuplicateTaskNameError:
-				# Ignore dogpiling
-				pass
+			refresh_data(section_id)
 			ophan_json = "[]"
 
 		last_read = client.get(section_id + ".epoch_seconds")
 
 		if last_read and not fresh(last_read):
-			deferred.defer(read_ophan)
+			refresh_data(section_id)
 
 		headers.json(self.response)
 		headers.set_cache_headers(self.response, 60)
