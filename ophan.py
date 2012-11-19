@@ -4,8 +4,11 @@ from google.appengine.api import memcache
 
 import settings
 import logging
+import urllib
 
 client = memcache.Client()
+
+FIFTEEN_MINUTES = 15 * 60
 
 
 def popular(section_id = None):
@@ -13,6 +16,12 @@ def popular(section_id = None):
 
 	if section_id:
 		most_read_url = most_read_url + "/" + section_id
+
+	params = {'age' : FIFTEEN_MINUTES}
+
+	most_read_url = most_read_url + "?" + urllib.urlencode(params)
+
+	logging.info(most_read_url)
 
 	result = fetch(most_read_url)
 
