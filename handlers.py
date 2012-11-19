@@ -8,8 +8,9 @@ import time
 from urllib import quote, urlencode
 from google.appengine.api import urlfetch
 from google.appengine.api import memcache
-from google.appengine.ext import deferred
+from google.appengine.api import taskqueue
 
+from google.appengine.ext import deferred
 
 import headers
 import ophan
@@ -27,11 +28,14 @@ def resolve_content(url):
 	data = json.loads(content_api.read(content_api.content_id(url), params))
 	return data.get('response', {}).get('content', {})
 
-def read_ophan(section = None):
-	if section:
-		pass
+def read_ophan(section_id = None):
 
-	ophan_json = ophan.popular()
+	ophan_json = None
+
+	if section_id:
+		ophan_json = ophan.popular(section_id = section_id)
+	else:
+		ophan_json = ophan.popular()
 
 	if not ophan_json:
 		raise deferred.PermanentTaskFailure()
@@ -43,8 +47,13 @@ def read_ophan(section = None):
 	resolved_stories = [resolve_content(entry['url']) for entry in ophan_data]
 
 	client = memcache.Client()
-	client.set('all', json.dumps(resolved_stories))
-	client.set('all.epoch_seconds', time.time())	
+
+	base_key = 'all'
+
+	if section_id: base_key = section_id
+
+	client.set(base_key, json.dumps(resolved_stories))
+	client.set(base_key + '.epoch_seconds', time.time())	
 
 class MainPage(webapp2.RequestHandler):
 	def get(self):
@@ -55,18 +64,22 @@ class MainPage(webapp2.RequestHandler):
 		self.response.out.write(template.render(template_values))
 
 class MostViewed(webapp2.RequestHandler):
-	def get(self):
-		section_name = 'all'
+	def get(self, section_id = None):
+		if not section_id: section_id = 'all'
 
 		client = memcache.Client()
 
-		ophan_json = client.get(section_name)
+		ophan_json = client.get(section_id)
 		
 		if not ophan_json:
-			deferred.defer(read_ophan)
+			try:
+				deferred.defer(read_ophan, section_id = section_id, _name = section_id)
+			except taskqueue.DuplicateTaskNameError:
+				# Ignore dogpiling
+				pass
 			ophan_json = "[]"
 
-		last_read = client.get(section_name + ".epoch_seconds")
+		last_read = client.get(section_id + ".epoch_seconds")
 
 		if last_read and not fresh(last_read):
 			deferred.defer(read_ophan)
