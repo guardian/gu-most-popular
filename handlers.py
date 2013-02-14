@@ -15,22 +15,33 @@ from google.appengine.ext import deferred
 import headers
 import ophan
 import content_api
+import formats
 
 jinja_environment = jinja2.Environment(
 	loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates")))
 
-FIVE_MINUTES = 5 * 60
+TEN_MINUTES = 10 * 60
 
 def fresh(current_seconds):
-	return (time.time() - current_seconds) < FIVE_MINUTES
+	return (time.time() - current_seconds) < TEN_MINUTES
 
 def resolve_content(url):
 	params = {'show-fields' : 'headline,thumbnail,trailText'}
 
-	data = json.loads(content_api.read(content_api.content_id(url), params))
-	return data.get('response', {}).get('content', {})
+	result = content_api.read(content_api.content_id(url), params)
+
+	if result:
+		data = json.loads(result)
+		return data.get('response', {}).get('content', {})
+	return None
 
 def read_ophan(section_id = None):
+
+	client = memcache.Client()
+
+	last_read = client.get(section_id + ".epoch_seconds")
+
+	if last_read and fresh(last_read): return
 
 	ophan_json = None
 
@@ -44,9 +55,9 @@ def read_ophan(section_id = None):
 
 	ophan_data = json.loads(ophan_json)
 
-	client = memcache.Client()
-
 	resolved_stories = [resolve_content(entry['url']) for entry in ophan_data]
+
+	resolved_stories = [story for story in resolved_stories if not story == None]
 
 	client = memcache.Client()
 
@@ -54,10 +65,11 @@ def read_ophan(section_id = None):
 
 	if section_id: base_key = section_id
 
-	client.set(base_key, json.dumps(resolved_stories))
-	client.set(base_key + '.epoch_seconds', time.time())
+	if len(resolved_stories) > 0:
+		client.set(base_key, json.dumps(resolved_stories))
+		client.set(base_key + '.epoch_seconds', time.time())
 
-	logging.info("Updated data for section %s" % section_id)	
+	logging.info("Updated data for section %s; listing %d stories" % (section_id, len(resolved_stories)))	
 
 def refresh_data(section_id):
 	deferred.defer(read_ophan, section_id = section_id)
@@ -89,4 +101,5 @@ class MostViewed(webapp2.RequestHandler):
 
 		headers.json(self.response)
 		headers.set_cache_headers(self.response, 60)
-		self.response.out.write(ophan_json)
+		headers.set_cors_headers(self.response)
+		self.response.out.write(formats.jsonp(self.request, ophan_json))

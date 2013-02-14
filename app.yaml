@@ -1,5 +1,5 @@
 application: gu-most-popular
-version: 3
+version: 6
 runtime: python27
 api_version: 1
 threadsafe: true
@@ -16,3 +16,4 @@ libraries:
 
 builtins:
 - deferred: on
+- remote_api: on

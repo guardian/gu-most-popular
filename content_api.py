@@ -31,8 +31,9 @@ def read(content_id, params = None):
 	result = fetch(url)
 
 	if not result.status_code == 200:
+		logging.warning("Content API read failed: %d" % result.status_code)
 		return None
 
-	client.set(url, result.content, time = 60 * 5)
+	client.set(url, result.content, time = 60 * 15)
 
 	return result.content
