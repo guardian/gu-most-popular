@@ -19,12 +19,13 @@ def popular(section_id = None):
 	ophan_api_key = results.iter().next().value
 	logging.info(ophan_api_key)
 
-	most_read_url = "http://api.ophan.co.uk/api/mostread?api-key=%s" % ophan_api_key
+	most_read_url = "http://api.ophan.co.uk/api/mostread"
 
 	if section_id:
 		most_read_url = most_read_url + "/" + section_id
 
-	params = {'age' : FIFTEEN_MINUTES}
+	params = {'age' : FIFTEEN_MINUTES,
+		'api-key' : ophan_api_key}
 
 	most_read_url = most_read_url + "?" + urllib.urlencode(params)
 
